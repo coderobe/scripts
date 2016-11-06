@@ -38,8 +38,8 @@ NUM_SERVERS=$(wc -l < "$SERVERS")
 # utility dispatcher
 iterate_and() {
   [[ $(type -t $1) = function ]] || return 1
-  while IFS='|' read user host port group nl; do
-    $1 "$user" "$host" "$port" "${group/#\$\$/}" "$nl" # nl might not exist, so its last
+  while IFS='|' read user host port comment nl; do
+    $1 "$user" "$host" "$port" "${comment/#\$\$/}" "$nl" # nl might not exist, so its last
   done < "${2:-$SERVERS}"
 }
 
@@ -49,8 +49,8 @@ export_to_ssh() {
 }
 
 list() {
-  local user=$1 host=$2 port=$3 group=$4 nl=$5
-  printf "${nl:+%-8s}${YELLOW}%-15s${COLOFF} ${WHITE}%-35s${COLOFF} ${TEAL}%6s${COLOFF}   %-12s\n" $nl "$user" "$host" "$port" "$group"
+  local user=$1 host=$2 port=$3 comment=$4 nl=$5
+  printf "${nl:+%-8s}${YELLOW}%-15s${COLOFF} ${WHITE}%-35s${COLOFF} ${TEAL}%6s${COLOFF}\t%-12s\n" $nl "$user" "$host" "$port" "$comment"
 }
 
 keyup() {
@@ -72,7 +72,7 @@ case $action in
   ;;
 
   add)
-    (( $# < 2 || $# > 4 )) && { echo "Usage: ${0##*/} add <user> <host> [port] [group]" >&2; exit 1; }
+    (( $# < 2 || $# > 4 )) && { echo "Usage: ${0##*/} add <user> <host> [port] [comment]" >&2; exit 1; }
     echo "$1|$2|${3:-22}|${4:-\$\$}" >> "$SERVERS"
   ;;
 
@@ -81,7 +81,7 @@ case $action in
       if [[ -z ${1//[[:digit:]]} ]]; then # strictly numerical
         (( $1 > NUM_SERVERS || $1 <= 0 )) && { echo "Invalid server entry." >&2; exit 1; }
         keyup $(sed "${1}s/|/ /g" "$SERVERS")
-      else # must be a group
+      else # must be a comment
         iterate_and keyup < <(sed -n "/|$1\$/p" "$SERVERS")
       fi
     else
@@ -90,7 +90,7 @@ case $action in
   ;;
 
   edit)
-    [[ $2 =~ user|host|port|group ]] || (( $# == 2 )) || { echo "Usage: ${0##*/} edit <user|host|port|group>" >&2; exit 1; }
+    [[ $2 =~ user|host|port|comment ]] || (( $# == 2 )) || { echo "Usage: ${0##*/} edit <user|host|port|comment>" >&2; exit 1; }
     (( $1 > NUM_SERVERS || $1 <= 0 )) && { echo "Invalid server entry." >&2; exit 1; }
 
     echo "Altering entry: $(sed -n "${1}{p;q;}" "$SERVERS")"
@@ -100,7 +100,7 @@ case $action in
       user) sed -i "$1s,^\([^|]\+\)|,$entry|," "$SERVERS" ;;
       host) sed -i "$1s,|\([-[:alnum:]\.\_]\+\)|,|$entry|," "$SERVERS" ;;
       port) sed -i "$1s,|[[:digit:]]\+|,|$entry|," "$SERVERS" ;;
-     group) sed -i "$1s,|[^|]\+\$,|$entry," "$SERVERS" ;;
+     comment) sed -i "$1s,|[^|]\+\$,|$entry," "$SERVERS" ;;
     esac
   ;;
 
@@ -125,14 +125,14 @@ case $action in
                       " ##     ## ##     ##   ## ##   ##             ##\n" \
                       " ##     ## ##     ##  ##   ##  ##       ##    ##\n" \
                       " ########   #######  ##     ## ########  ######${COLOFF}\n"
-    printf "%-7s ${YELLOW}%-15s${COLOFF} ${WHITE}%-35s${COLOFF} ${TEAL}%6s${COLOFF}   %-12s\n" "No." "Username" "Hostname" "Port" "Group"
-    echo "-------------------------------------------------------------------------------"
-
+    printf "%-7s ${YELLOW}%-15s${COLOFF} ${WHITE}%-35s${COLOFF} ${TEAL}%6s${COLOFF}\t%-12s\n" "No." "Username" "Hostname" "Port" "Comment"
+    printf %$(tput cols | xargs)s | tr " " "-"
+    
     if [[ $1 ]]; then
       if [[ -z ${1//[[:digit:]]} ]]; then # strictly numerical
         (( $1 > NUM_SERVERS || $1 <= 0 )) && { echo "Invalid server entry." >&2; exit 1; }
         list $(awk -F'|' 'NR == '$1'{print $1,$2,$3,$4,NR }' "$SERVERS")
-      else # must be a group
+      else # must be a comment
         iterate_and list <(awk '/\|'$1'$/{ print $0,"|",NR }' "$SERVERS")
       fi
     else
@@ -150,7 +150,7 @@ case $action in
      echo "  list [servernum]"
      echo "  add <user> <host> [port]"
      echo "  keyup <servernum>"
-     echo "  edit <servernum> <user|host|port>"
+     echo "  edit <servernum> <user|host|port|comment>"
      echo "  remove <servernum>"
      echo "  search <pattern>"
      echo "  export <servernum>"
