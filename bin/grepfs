@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+# This has only been tested on archlinux blah blah blah
+# Licensed under Beerware
+
+mount | grep "type $@" | rev | cut -d" " -f2- | rev
